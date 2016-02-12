@@ -67,6 +67,7 @@ classdef DS1054Z < handle
         T_SCALE
         T_OFFSET
         T_MODE
+        SRATE
         TRIG_HOLD_OFF
         TRIG_EDGE_CHN
         TRIG_EDGE_SLOPE
@@ -786,7 +787,7 @@ classdef DS1054Z < handle
         % Assorted      Getters / Setters
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
         
-          %% Display Commands
+        %% Display Commands
         %
         % Display Clear
         function [] = DispClear(obj)
@@ -982,7 +983,12 @@ classdef DS1054Z < handle
             end
             
             obj.vCom.StrWrite([':TRIG:EDG:LEV ' num2str(val, '%10.3e') ] );
- 
+        end
+        
+        % SRATE getter
+        function val = get.SRATE(obj)
+          resp = obj.vCom.Query(':ACQ:SRAT?');
+          val = str2double(deblank(resp));
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1053,13 +1059,25 @@ classdef DS1054Z < handle
                 figure;
                 imshow(img,'Border','tight');
                 axis equal
+                
+                % Add current date and username to blank space on Rigol
+                % Screen shot
+                unames = { getenv('USER'), getenv('USERNAME'), getenv('LOGIN'), getenv('LOGNAME') };
+                % empty enteries are whitespace 
+                ustr = sortrows( char(unames), -1 );
+                
+                % Set text color for white on black background (default
+                % output of DS1054Z) or black on white
+                tColor = [ 1 1 1 ] .* ~logical(ColorInvert);
+                
+                text( 480, 467, [datestr(now) '; ' ustr(1,:) ], 'Interpreter', 'none', 'Color', tColor )
                 img = [];
             end
                 
         end
         
         
-        % WaveAquire
+        % WaveAcquire
         %   CHNIdx: vector of channels to be acquired
         %       CHNIdx = [ 1 2 3 4 ] acquire all 4 channels return in order
         %
@@ -1070,12 +1088,24 @@ classdef DS1054Z < handle
         %   Samples) or form acquisition memory
         %
         %   
-        function [wave,Fs,ts] = WaveAquire(obj, CHNIdx, ScreenMemory )
+        function [wave,Fs,ts] = WaveAcquire(obj, CHNIdx, ScreenMemory )
             
+            % default to acquiring all active channels
+            if nargin < 2
+                CHNIdx = obj.ActiveChannels();
+            end
+            
+            % default to acquiring the acquistion memory
             if nargin < 3
                 ScreenMemory = 0;
             end
             
+            if any( ~ismember(CHNIdx,obj.ActiveChannels()) )
+                error('Some Channels are not active');
+            end
+            
+            % If the scope is in a non idle mode resume after memory
+            % transfer
             resp = obj.vCom.Query(':TRIG:STAT?');
             if strcmpi(deblank(resp), {'STOP'} )
                 ReRun = 0;
@@ -1084,95 +1114,164 @@ classdef DS1054Z < handle
                 ReRun = 1;
             end
             
+            % DS1054Z must be in idle/stop mode to transfer acquistion
+            % memory over SCPI/LXI interface
             i = 0;
             resp = [];
             while ~strcmpi(deblank(resp), {'STOP'} )
                 resp = obj.vCom.Query(':TRIG:STAT?');
                 pause(0.01)
                 i = i + 1;
+                
+                if i > 30 * 100
+                    error('Scope did not end acquisition cycle');
+                end
             end
                 
+            obj.vCom.StrWrite(sprintf(':WAV:SOUR CHAN%d', CHNIdx(1)))
+            obj.vCom.StrWrite(sprintf(':WAV:STAR %d', 1));
+            obj.vCom.StrWrite(sprintf(':WAV:STOP %d', 2));
+            
+            % Set the output memory interface 
             if ScreenMemory
                 obj.vCom.StrWrite(':WAV:MODE NORM');
             else
                 obj.vCom.StrWrite(':WAV:MODE RAW');
             end
             
-            resp = obj.vCom.Query(':WAV:PRE?');
+            % Wave preamble provides the time scale and veritcal scale of
+            % ONE channel. However time base is common between channels
+            %
+            % Hold onto wave preamble response for debuging
+            wvs_resp = obj.vCom.Query(':WAV:PRE?');
             
-            waveSettings =  regexp(deblank(resp), ',', 'split');
- 
-            Wav_XINC   = str2num(waveSettings{5}); %<xincrement>: the time difference between two neighbouring points in the X direction.
- 
+            wvs = obj.WavStruct(regexp(deblank(wvs_resp), ',', 'split'));
+
+            % Acquistion memory depth is not directly known when in auto
+            % mode ... Must infer from sample rate and time scale
+            % 12 horizontal divisons
             T_LENGTH = 12*obj.T_SCALE;
  
-            REC_POINTS = min( floor( T_LENGTH/Wav_XINC ), 12e6 );
+            Fs = round(obj.SRATE);
+            
+            memSamples = min( floor( T_LENGTH * Fs ), 12e6 );
  
-            fs = 1/Wav_XINC;
+            % The DS1054Z does not always return a correct preamble
+            % sometimes the xincrement field is orders of magnitude in
+            % error
+            if Fs ~= round( 1/(wvs.xincrement) )
+                [n,~,s] = engunits(1/(wvs.xincrement));
+                disp( [ 'Preamble Sample Rate: ' num2str(n) ' ' s 'Sa/s'] );
+                
+                [n,~,s] = engunits(obj.SRATE);
+                disp( [ 'ACQ Sample Rate: '  num2str(n) ' ' s 'Sa/s'] );
+                
+                disp('buggy scope..., perhaps bad preamble?')
+                disp(wvs)
+                disp('Preamble return string:')
+                disp(wvs_resp)
+            end
             
-            wave = zeros(REC_POINTS,length(CHNIdx));
+
             
-            waveProp = zeros(10, length(CHNIdx));
+            % Pre-allocate wave sample memory
+            wave = zeros(memSamples,length(CHNIdx));
+            
+            % Pre-allocate wave preamble struct array
+            wPre = repmat(wvs,1,length(CHNIdx));
  
             for j = 1:length(CHNIdx)
                 CHN = CHNIdx(j);
                 obj.vCom.StrWrite(sprintf(':WAV:SOUR CHAN%d', CHN));
                 
                 resp = obj.vCom.Query(':WAV:PRE?');
-            
-                waveSettings =  regexp(deblank(resp), ',', 'split');
-                
-                waveProp(:,j) = str2double(waveSettings)';
+                wPre(j) = obj.WavStruct(regexp(deblank(resp), ',', 'split'));
  
                 % DS1054Z Does not like to read more than somewhere between 
                 % 1 MSample to 250 kSamples at a time
                 % Iterate reading up to 250 kSample memory blocks
-                for i = 1:48
+                blkSize = 200E3; %round( 500E3 / obj.NumActiveChannels() );
+                
+                fprintf( '\nTransfering Channel %d\n', CHN );
+                
+                for i = 1:ceil(12E6/blkSize)
  
-                    startidx = 1 + (i-1)*250E3;
-                    stopidx = min( i*250E3, REC_POINTS );
- 
+                    startidx = 1 + (i-1)*blkSize;
+                    stopidx = min( i*blkSize, memSamples );
+
                     obj.vCom.StrWrite(sprintf(':WAV:STAR %d', startidx));
- 
- 
                     obj.vCom.StrWrite(sprintf(':WAV:STOP %d', stopidx));
- 
- 
-                    buf = obj.vCom.Query(':WAV:DATA?', 1000020);
+
+                    buf = obj.vCom.Query(':WAV:DATA?', round(blkSize*1.1));
  
                     len = stopidx - startidx;
-                    
+
                     if length(buf) < len
+                        disp('Insufficent data samples returned, perhaps bad preamble?')
+                        disp(wvs)
+                        disp('Preamble return string:')
+                        disp(wvs_resp)
                         error('Did not return data')
                     end
                     
                     wave(startidx:stopidx, j) = buf(12:12+len);
- 
- 
-                    if( stopidx >= REC_POINTS )
+                    
+                    if mod(i,10) == 1
+                        fprintf('\n')
+                    end
+                    
+                    fprintf( '%3d%% ', round( stopidx/memSamples *100) );
+                    
+                    if( stopidx >= memSamples )
                         break;
                     end
                 end
  
             end
             
+            fprintf('\n')
+            
             if ReRun            
                 obj.vCom.StrWrite(':RUN');
             end
             
-            if nargout < 1
-                    wave=[];
+            if nargout >= 1
+                for j = 1:length(CHNIdx)
+                    wave(:,j) = (wave(:,j) - wPre(j).yreference - wPre(j).yorigin) .* wPre(j).yincrement;
+                end
             else
-                    for j = 1:length(CHNIdx)
-                        CHN = CHNIdx(j);
-                        wave(:,j) = (wave(:,j)-waveProp(10,j)-waveProp(9,j)).*waveProp(8,j);
-                    end
-                    Fs = fs;
-                    ts = 0:1/fs:(REC_POINTS-1)/fs;
+                wave=[];
+                disp('No assignment made... saved lots of data points from scrolling')
             end
             
+            if nargout == 3
+                ts = 0:1/Fs:(memSamples-1)/Fs;
+            end
         end
         
+    end
+    
+    methods ( Access = private )
+        function wavStruct = WavStruct(obj, wavPreamble)
+            
+            fields = {'format';  'type';  'points';  'count';  'xincrement'; ...
+                'xorigin';  'xreference';  'yincrement';  'yorigin';  'yreference' };
+            
+            val = str2double(wavPreamble);
+            cellVal = num2cell(val');
+            
+            wavStruct = cell2struct(cellVal, fields, 1 );
+        end
+        
+        function n = NumActiveChannels(obj)
+            n = sum( [ obj.CHAN1_DISP obj.CHAN2_DISP obj.CHAN3_DISP obj.CHAN4_DISP ] );
+        end
+        
+        function ActChan = ActiveChannels(obj)
+            idx = [ obj.CHAN1_DISP obj.CHAN2_DISP obj.CHAN3_DISP obj.CHAN4_DISP ];
+            temp = 1:4;
+            ActChan = temp(idx);
+        end
     end
     
 end

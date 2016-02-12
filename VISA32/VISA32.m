@@ -24,11 +24,11 @@ classdef VISA32 < handle
     %
     %       h.Open('GPIB0::1::INSTR');
     %
-    %       id = h.StrQuery('*IDN?')
+    %       id = h.Query('*IDN?')
     %
     %           id = HEWLETT-PACKARD,34401A,0,9-5-2
     %
-    %       ms = h.StrQuery('MEAS?')
+    %       ms = h.Query('MEAS?')
     %       
     %   Note query is returned as a char array and must be parsed to a
     %   floating point type.
