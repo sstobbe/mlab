@@ -1287,6 +1287,11 @@ classdef DS1054Z < handle
             end
         end
         
+        % Set trigger delay to 1st graticule on left hand side
+        function [] = LeftTrigger(obj)
+            obj.T_OFFSET = 5 * obj.T_SCALE;
+        end
+        
     end
     
     methods ( Access = private )
