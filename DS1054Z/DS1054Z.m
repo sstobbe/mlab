@@ -72,6 +72,7 @@ classdef DS1054Z < handle
         TRIG_EDGE_CHN
         TRIG_EDGE_SLOPE
         TRIG_EDGE_LEVEL
+        TRIG_SWEEP
     end
     
     methods
@@ -967,7 +968,6 @@ classdef DS1054Z < handle
             end
             
             obj.vCom.StrWrite([':TRIG:EDG:SLOP ' deblank(upper(val)) ] );
- 
         end
         
         % TRIG_EDGE_LEVEL getter
@@ -984,6 +984,12 @@ classdef DS1054Z < handle
             
             obj.vCom.StrWrite([':TRIG:EDG:LEV ' num2str(val, '%10.3e') ] );
         end
+        
+        % TRIG_SWEEP getter
+        function val = get.TRIG_SWEEP(obj)
+          val = deblank(obj.vCom.Query(':TRIG:SWE?'));
+        end
+        
         
         % SRATE getter
         function val = get.SRATE(obj)
@@ -1107,13 +1113,29 @@ classdef DS1054Z < handle
             % If the scope is in a non idle mode resume after memory
             % transfer
             resp = obj.vCom.Query(':TRIG:STAT?');
-            if strcmpi(deblank(resp), {'STOP'} )
-                ReRun = 0;
-            else
-                obj.vCom.StrWrite(':STOP');
-                ReRun = 1;
+            switch deblank(resp)
+                case { 'TD', 'AUTO', 'WAIT' }
+                    ReRun = 1;
+                    obj.vCom.StrWrite(':STOP');
+                    
+                case 'RUN'
+                    while any( strcmpi(deblank(resp), 'RUN' ) )
+                        resp = obj.vCom.Query(':TRIG:STAT?');
+                        pause(0.01)
+                    end
+                    
+                    obj.vCom.StrWrite(':STOP');
+                    
+                    if strcmpi( obj.TRIG_SWEEP, 'SING' )
+                        ReRun = 0;
+                    else
+                        ReRun = 1;
+                    end
+
+                case 'STOP'
+                    ReRun = 0;
             end
-            
+   
             % DS1054Z must be in idle/stop mode to transfer acquistion
             % memory over SCPI/LXI interface
             i = 0;
@@ -1182,14 +1204,17 @@ classdef DS1054Z < handle
  
             for j = 1:length(CHNIdx)
                 CHN = CHNIdx(j);
+                
+                % select channel (CHN) for transfer
                 obj.vCom.StrWrite(sprintf(':WAV:SOUR CHAN%d', CHN));
                 
+                % request channel wave preamble
                 resp = obj.vCom.Query(':WAV:PRE?');
                 wPre(j) = obj.WavStruct(regexp(deblank(resp), ',', 'split'));
  
                 % DS1054Z Does not like to read more than somewhere between 
-                % 1 MSample to 250 kSamples at a time
-                % Iterate reading up to 250 kSample memory blocks
+                % 1 MSample to 200 kSamples at a time
+                % Iterate reading up to 200 kSample memory blocks
                 blkSize = 200E3; %round( 500E3 / obj.NumActiveChannels() );
                 
                 fprintf( '\nTransfering Channel %d\n', CHN );
@@ -1199,14 +1224,23 @@ classdef DS1054Z < handle
                     startidx = 1 + (i-1)*blkSize;
                     stopidx = min( i*blkSize, memSamples );
 
+                    % set start and stop indices for current memory block
                     obj.vCom.StrWrite(sprintf(':WAV:STAR %d', startidx));
                     obj.vCom.StrWrite(sprintf(':WAV:STOP %d', stopidx));
 
+                    % Query for memory block
                     buf = obj.vCom.Query(':WAV:DATA?', round(blkSize*1.1));
  
-                    len = stopidx - startidx;
+                    len = stopidx - startidx + 1;
+                    
+                    TMC_HDR = buf(1:11);
+                    TMC_dlen = str2double( TMC_HDR(3:end) );
+                    
+                    if TMC_dlen ~= len
+                        disp( 'Scope did not return correct data length')
+                    end
 
-                    if length(buf) < len
+                    if length(buf) < ( len + 11 )
                         disp('Insufficent data samples returned, perhaps bad preamble?')
                         disp(wvs)
                         disp('Preamble return string:')
@@ -1214,12 +1248,14 @@ classdef DS1054Z < handle
                         error('Did not return data')
                     end
                     
-                    wave(startidx:stopidx, j) = buf(12:12+len);
+                    % Assign wave data index past TMC header
+                    wave(startidx:stopidx, j) = buf(12:(12+len-1));
                     
                     if mod(i,10) == 1
                         fprintf('\n')
                     end
                     
+                    % print percent complete
                     fprintf( '%3d%% ', round( stopidx/memSamples *100) );
                     
                     if( stopidx >= memSamples )
@@ -1235,7 +1271,9 @@ classdef DS1054Z < handle
                 obj.vCom.StrWrite(':RUN');
             end
             
+            
             if nargout >= 1
+                % Convert binary ADC output to floating point measurement
                 for j = 1:length(CHNIdx)
                     wave(:,j) = (wave(:,j) - wPre(j).yreference - wPre(j).yorigin) .* wPre(j).yincrement;
                 end
