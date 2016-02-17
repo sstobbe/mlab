@@ -73,6 +73,20 @@ classdef DS1054Z < handle
         TRIG_EDGE_SLOPE
         TRIG_EDGE_LEVEL
         TRIG_SWEEP
+        WREC_FEND
+        WREC_FMAX
+        WREC_FINT
+        WREC_PROM
+        WREC_OPER
+        WREC_ENAB
+        WPLAY_FSTART
+        WPLAY_FEND
+        WPLAY_FMAX
+        WPLAY_FINT
+        WPLAY_MODE
+        WPLAY_DIR
+        WPLAY_OPER
+        WPLAY_FCUR
     end
     
     methods
@@ -996,6 +1010,213 @@ classdef DS1054Z < handle
           resp = obj.vCom.Query(':ACQ:SRAT?');
           val = str2double(deblank(resp));
         end
+
+        % WREC_FEND getter
+        function val = get.WREC_FEND(obj)
+          resp = obj.vCom.Query(':FUNC:WREC:FEND?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WREC_FEND setter
+        function obj = set.WREC_FEND(obj,val)
+            if ~isscalar(val)
+                error('INVALID WREC_FEND');
+            end
+            obj.vCom.StrWrite([':FUNC:WREC:FEND ' num2str(val, '%d') ] );
+        end
+        
+        % WREC_FMAX getter
+        function val = get.WREC_FMAX(obj)
+          resp = obj.vCom.Query(':FUNC:WREC:FMAX?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WREC_FINT getter
+        function val = get.WREC_FINT(obj)
+          resp = obj.vCom.Query(':FUNC:WREC:FINT?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WREC_FINT setter
+        function obj = set.WREC_FINT(obj,val)
+            if ~isscalar(val)
+                error('INVALID WREC_FINT');
+            end
+            obj.vCom.StrWrite([':FUNC:WREC:FINT ' num2str(val, '%10.3e') ] );
+        end
+        
+        % WREC_PROM getter
+        function val = get.WREC_PROM(obj)
+          resp = obj.vCom.Query(':FUNC:WREC:PROM?');
+          val = any(strcmpi(deblank(resp), {'ON','1'}));
+        end
+        
+        % WREC_PROM setter
+        function obj = set.WREC_PROM(obj,val)
+            if ~isscalar(val)
+                error('INVALID WREC_PROM');
+            end
+            
+            if ischar( val )
+                valparse = strcmpi(val,'ON');
+            else
+                valparse = logical(val);
+            end
+            
+            obj.vCom.StrWrite([':FUNC:WREC:PROM ' num2str(valparse, '%d') ] );
+        end
+        
+        % WREC_OPER getter
+        function val = get.WREC_OPER(obj)
+          resp = obj.vCom.Query(':FUNC:WREC:OPER?');
+          val = strcmpi(deblank(resp), 'RUN');
+        end
+        
+        % WREC_OPER setter
+        function obj = set.WREC_OPER(obj,val)
+            if ~isscalar(val)
+                error('INVALID WREC_OPER');
+            end
+            
+            if ischar( val )
+                cmdidx = strcmpi(val,'ON') + 1;
+            else
+                cmdidx = logical(val) + 1;
+            end
+            
+            cmd = { 'STOP', 'RUN' };
+            obj.vCom.StrWrite([':FUNC:WREC:OPER ' cmd{cmdidx+1} ] );
+        end
+        
+        
+        % WREC_ENAB getter
+        function val = get.WREC_ENAB(obj)
+          resp = obj.vCom.Query(':FUNC:WREC:ENAB?');
+          val = any(strcmpi(deblank(resp), {'ON','1'}));
+        end
+        
+        % WREC_ENAB setter
+        function obj = set.WREC_ENAB(obj,val)
+            if ~isscalar(val)
+                error('INVALID WREC_ENAB');
+            end
+            
+            if ischar( val )
+                valp = strcmpi(val,'ON');
+            else
+                valp = logical(val);
+            end
+            obj.vCom.StrWrite([':FUNC:WREC:ENAB ' num2str(valp,'%d') ] );
+        end
+        
+        
+        % WPLAY_FSTART getter
+        function val = get.WPLAY_FSTART(obj)
+          resp = obj.vCom.Query(':FUNC:WREC:FINT?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WPLAY_FSTART setter
+        function obj = set.WPLAY_FSTART(obj,val)
+            if ~isscalar(val)
+                error('INVALID WPLAY_FSTART');
+            end
+            obj.vCom.StrWrite([':FUNC:WREC:FINT ' num2str(val, '%10.3e') ] );
+        end
+        
+        % WPLAY_FEND getter
+        function val = get.WPLAY_FEND(obj)
+          resp = obj.vCom.Query(':FUNC:WREP:FEND?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WPLAY_FEND setter
+        function obj = set.WPLAY_FEND(obj,val)
+            if ~isscalar(val)
+                error('INVALID WPLAY_FEND');
+            end
+            obj.vCom.StrWrite([':FUNC:WREP:FEND ' num2str(val, '%d') ] );
+        end
+        
+        % WPLAY_FMAX getter
+        function val = get.WPLAY_FMAX(obj)
+          resp = obj.vCom.Query(':FUNC:WREP:FMAX?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WPLAY_FINT getter
+        function val = get.WPLAY_FINT(obj)
+          resp = obj.vCom.Query(':FUNC:WREP:FINT?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WPLAY_FINT setter
+        function obj = set.WPLAY_FINT(obj,val)
+            if ~isscalar(val)
+                error('INVALID WPLAY_FINT');
+            end
+            obj.vCom.StrWrite([':FUNC:WREP:FINT ' num2str(val, '%10.3e') ] );
+        end
+        
+        
+        % WPLAY_MODE getter
+        function val = get.WPLAY_MODE(obj)
+          resp = obj.vCom.Query(':FUNC:WREP:MODE?');
+          val = deblank(resp);
+        end
+        
+        % WPLAY_MODE setter
+        function obj = set.WPLAY_MODE(obj,val)
+            if ~any(strcmpi(deblank(val),{'REP','REPEAT','SING','SINGLE'}))
+                error('INVALID WPLAY_MODE');
+            end
+            
+            obj.vCom.StrWrite([':FUNC:WREP:MODE ' deblank(upper(val)) ] );
+        end
+        
+        % WPLAY_DIR getter
+        function val = get.WPLAY_DIR(obj)
+          resp = obj.vCom.Query(':FUNC:WREP:DIR?');
+          val = deblank(resp);
+        end
+        
+        % WPLAY_DIR setter
+        function obj = set.WPLAY_DIR(obj,val)
+            if ~any(strcmpi(deblank(val),{'FORW','FORWARD','BACK','BACKWARD'}))
+                error('INVALID WPLAY_DIR');
+            end
+            
+            obj.vCom.StrWrite([':FUNC:WREP:DIR ' deblank(upper(val)) ] );
+        end
+        
+        % WPLAY_OPER getter
+        function val = get.WPLAY_OPER(obj)
+          resp = obj.vCom.Query(':FUNC:WREP:OPER?');
+          val = deblank(resp);
+        end
+        
+        % WPLAY_MODE setter
+        function obj = set.WPLAY_OPER(obj,val)
+            if ~any(strcmpi(deblank(val),{'PLAY','PAUS','PAUSE','STOP'}))
+                error('INVALID WPLAY_OPER');
+            end
+            
+            obj.vCom.StrWrite([':FUNC:WREP:OPER ' deblank(upper(val)) ] );
+        end
+        
+        % WPLAY_FCUR getter
+        function val = get.WPLAY_FCUR(obj)
+          resp = obj.vCom.Query(':FUNC:WREP:FCUR?');
+          val = str2double(deblank(resp));
+        end
+        
+        % WPLAY_FCUR setter
+        function obj = set.WPLAY_FCUR(obj,val)
+            if ~isscalar(val)
+                error('INVALID WPLAY_FCUR');
+            end
+            obj.vCom.StrWrite([':FUNC:WREP:FCUR ' num2str(val, '%d') ] );
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Functions
@@ -1118,6 +1339,10 @@ classdef DS1054Z < handle
                     ReRun = 1;
                     obj.vCom.StrWrite(':STOP');
                     
+                % When the DS1054Z is in 'RUN' mode it does not execute the
+                % stop command. Typical case of 'RUN' mode is filling the
+                % pre-trigger buffer. Wait until the scope transistions 
+                % into another mode where it accepts the stop command.
                 case 'RUN'
                     while any( strcmpi(deblank(resp), 'RUN' ) )
                         resp = obj.vCom.Query(':TRIG:STAT?');
@@ -1174,9 +1399,21 @@ classdef DS1054Z < handle
             % 12 horizontal divisons
             T_LENGTH = 12*obj.T_SCALE;
  
-            Fs = round(obj.SRATE);
-            
-            memSamples = min( floor( T_LENGTH * Fs ), 12e6 );
+            % Parse acquision sample rate
+            if ScreenMemory
+                % when sampling from screen memory use wave preamble
+                Fs = 1/(wvs.xincrement);
+                
+                [n,~,s] = engunits(Fs);
+                disp( [ 'Screen Equivelenet Time Sample Rate: ' num2str(n) ' ' s 'Sa/s'] );
+            else
+                Fs = round(obj.SRATE);
+            end
+            if ScreenMemory
+                memSamples = min( floor( T_LENGTH * 1/(wvs.xincrement)), 1200 );
+            else
+                memSamples = min( floor( T_LENGTH * Fs ), 12e6 );
+            end
  
             % The DS1054Z does not always return a correct preamble
             % sometimes the xincrement field is orders of magnitude in
