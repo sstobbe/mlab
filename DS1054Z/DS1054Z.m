@@ -1327,7 +1327,9 @@ classdef DS1054Z < handle
                 ScreenMemory = 0;
             end
             
-            if any( ~ismember(CHNIdx,obj.ActiveChannels()) )
+            if any( ~ismember(CHNIdx,obj.ActiveChannels()) ) || ...
+                    length(CHNIdx) ~= obj.NumActiveChannels
+            
                 error('Some Channels are not active');
             end
             
@@ -1406,12 +1408,10 @@ classdef DS1054Z < handle
                 
                 [n,~,s] = engunits(Fs);
                 disp( [ 'Screen Equivelenet Time Sample Rate: ' num2str(n) ' ' s 'Sa/s'] );
+                
+                memSamples = min( floor( T_LENGTH * 1/(wvs.xincrement)), 1200 ); 
             else
                 Fs = round(obj.SRATE);
-            end
-            if ScreenMemory
-                memSamples = min( floor( T_LENGTH * 1/(wvs.xincrement)), 1200 );
-            else
                 memSamples = min( floor( T_LENGTH * Fs ), 12e6 );
             end
  
@@ -1527,6 +1527,86 @@ classdef DS1054Z < handle
         % Set trigger delay to 1st graticule on left hand side
         function [] = LeftTrigger(obj)
             obj.T_OFFSET = 5 * obj.T_SCALE;
+        end
+        
+        % WavReplay
+        %   returns:
+        %       wave    ( m by n by j ) m: sample buffer length
+        %                               n: frame count
+        %                               j: channel count
+        function [wave,Fs,ts] = WavReplay(obj, CHNIdx, ScreenMemory )
+            
+            if ~obj.WREC_ENAB
+                error('Wave recording not enabled')
+            end
+            
+            % default to acquiring all active channels
+            if nargin < 2
+                CHNIdx = obj.ActiveChannels();
+            end
+            
+            % default to acquiring the acquistion memory
+            if nargin < 3
+                ScreenMemory = 0;
+            end
+            
+            if any( ~ismember(CHNIdx,obj.ActiveChannels()) ) || ...
+                    length(CHNIdx) ~= obj.NumActiveChannels
+                error('Some Channels are not active');
+            end
+            
+            % Set the output memory interface 
+            if ScreenMemory
+                obj.vCom.StrWrite(':WAV:MODE NORM');
+            else
+                obj.vCom.StrWrite(':WAV:MODE RAW');
+            end
+            
+            % Wave preamble provides the time scale and veritcal scale of
+            % ONE channel. However time base is common between channels
+            %
+            % Hold onto wave preamble response for debuging
+            wvs_resp = obj.vCom.Query(':WAV:PRE?');
+            
+            wvs = obj.WavStruct(regexp(deblank(wvs_resp), ',', 'split'));
+
+            % Acquistion memory depth is not directly known when in auto
+            % mode ... Must infer from sample rate and time scale
+            % 12 horizontal divisons
+            T_LENGTH = 12*obj.T_SCALE;
+ 
+            % Parse acquision sample rate
+            if ScreenMemory
+                % when sampling from screen memory use wave preamble
+                Fs = 1/(wvs.xincrement);
+                
+                [n,~,s] = engunits(Fs);
+                disp( [ 'Screen Equivelenet Time Sample Rate: ' num2str(n) ' ' s 'Sa/s'] );
+                
+                memSamples = min( floor( T_LENGTH * 1/(wvs.xincrement)), 1200 ); 
+            else
+                Fs = round(obj.SRATE);
+                memSamples = min( floor( T_LENGTH * Fs ), 12e6 );
+            end
+            
+            frameCount = obj.WPLAY_FEND;
+            
+            wave = NaN(memSamples,frameCount,length(CHNIdx));
+            
+            obj.WPLAY_OPER = 'STOP';
+            
+            for frame = 1:frameCount
+                obj.WPLAY_FCUR = frame;
+                
+                w = obj.WaveAcquire(CHNIdx, ScreenMemory );
+                
+                wave(:,frame,:) = w;
+            end
+            
+            if nargout == 3
+                ts = 0:1/Fs:(memSamples-1)/Fs;
+            end
+            
         end
         
     end
