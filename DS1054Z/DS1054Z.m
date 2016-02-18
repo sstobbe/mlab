@@ -1328,7 +1328,7 @@ classdef DS1054Z < handle
             end
             
             if any( ~ismember(CHNIdx,obj.ActiveChannels()) ) || ...
-                    length(CHNIdx) ~= obj.NumActiveChannels
+                    length(CHNIdx) > obj.NumActiveChannels
             
                 error('Some Channels are not active');
             end
@@ -1551,7 +1551,7 @@ classdef DS1054Z < handle
             end
             
             if any( ~ismember(CHNIdx,obj.ActiveChannels()) ) || ...
-                    length(CHNIdx) ~= obj.NumActiveChannels
+                    length(CHNIdx) > obj.NumActiveChannels
                 error('Some Channels are not active');
             end
             
