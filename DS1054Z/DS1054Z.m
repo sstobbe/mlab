@@ -5,7 +5,7 @@ classdef DS1054Z < handle
     %
     %   Scott Stobbe 2016
     
-    properties (SetAccess = protected)
+    properties (SetAccess = protected, Transient = true)
         RSRC_ADDR
         vCom
         MFG
@@ -14,7 +14,7 @@ classdef DS1054Z < handle
         FW_VER
     end
     
-    properties % public 
+    properties (Dependent = true)% public 
         CHAN1_BWL
         CHAN1_COUP
         CHAN1_DISP
@@ -1609,6 +1609,11 @@ classdef DS1054Z < handle
             
         end
         
+        function saveObj = saveobj(obj)
+            saveObj = struct(obj);
+            saveObj.TimeStamp = datestr(now);
+        end
+        
     end
     
     methods ( Access = private )
@@ -1632,6 +1637,39 @@ classdef DS1054Z < handle
             temp = 1:4;
             ActChan = temp(idx);
         end
+    end
+    
+    methods (Static = true)
+        % Load DS1054Z obj from file, ldat is a struct with the same
+        % properties as a DS1054Z obj.
+        %
+        % TODO: Need to decide if loading updates the scope to previous
+        % settings or provides a cached obj for reference
+        function obj = loadobj(ldat)
+            disp(ldat);  
+%           floadNames = { 'CHAN1_BWL', 'CHAN1_COUP', 'CHAN1_DISP', 'CHAN1_INV', 'CHAN1_OFFS', ...
+%               '', 'CHAN1_TCAL', 'CHAN1_SCAL', 'CHAN1_PROB', 'CHAN1_UNIT', 'CHAN1_VERN', ...
+%               'CHAN2_BWL', 'CHAN2_COUP', 'CHAN2_DISP', 'CHAN2_INV', 'CHAN2_OFFS', '', ...
+%               'CHAN2_TCAL', 'CHAN2_SCAL', 'CHAN2_PROB', 'CHAN2_UNIT', 'CHAN2_VERN', 'CHAN3_BWL', ...
+%               'CHAN3_COUP', 'CHAN3_DISP', 'CHAN3_INV', 'CHAN3_OFFS', '', 'CHAN3_TCAL', ...
+%               'CHAN3_SCAL', 'CHAN3_PROB', 'CHAN3_UNIT', 'CHAN3_VERN', 'CHAN4_BWL', 'CHAN4_COUP', ...
+%               'CHAN4_DISP', 'CHAN4_INV', 'CHAN4_OFFS', '', 'CHAN4_TCAL', 'CHAN4_SCAL', ...
+%               'CHAN4_PROB', 'CHAN4_UNIT', 'CHAN4_VERN', 'DISP_TYPE', 'DISP_PERS_TIME', 'DISP_WAVE_BR', ...
+%               'DISP_GRID', 'DISP_GRID_BR', 'T_SCALE', 'T_OFFSET', 'T_MODE', 'TRIG_HOLD_OFF', ...
+%               'TRIG_EDGE_CHN', 'TRIG_EDGE_SLOPE', 'TRIG_EDGE_LEVEL', 'TRIG_SWEEP', };
+%           
+%           propnames = fieldnames(ldat);
+%           
+            obj =  DS1054Z(ldat.RSRC_ADDR);
+          
+%           for i = 1:length(propnames)
+%               if ismember( propnames{i}, floadNames )
+%                 obj.(propnames{i}) = ldat.(propnames{i});
+%               end
+%           end
+        
+        end
+        
     end
     
 end
