@@ -16,7 +16,7 @@ classdef E3648A < handle
         CAL_COUNT
     end
     
-    properties
+    properties (Dependent = true)% public 
         V1_SET 
         V1_STEP
         I1_SET
@@ -327,7 +327,7 @@ classdef E3648A < handle
             
             obj.vCom.StrWrite(['DISPLAY:TEXT "' val '"' ] );
             if isempty(val)
-                obj.vCom.StrWrite(['DISPlAY:TEXT:CLEAR' ] );
+                obj.vCom.StrWrite('DISPlAY:TEXT:CLEAR');
             end
                 
         end
@@ -335,7 +335,7 @@ classdef E3648A < handle
         % DISPLAY_MODE getter
         function val = get.DISPLAY_TEXT(obj)
             resp = obj.vCom.Query('DISPLAY:TEXT?');
-            [t,m] = regexp(resp, '(")(.*?)\1', 'tokens', 'match');
+            [t,~] = regexp(resp, '(")(.*?)\1', 'tokens', 'match');
             val = t{1}{2};
         end   
         
@@ -359,9 +359,9 @@ classdef E3648A < handle
         
         function OVPClear(obj)
             obj.Intrument(1);
-            obj.vCom.StrWrite(['VOLT:PROT:CLE'] );
+            obj.vCom.StrWrite('VOLT:PROT:CLE');
             obj.Intrument(2);
-            obj.vCom.StrWrite(['VOLT:PROT:CLE'] );
+            obj.vCom.StrWrite('VOLT:PROT:CLE');
         end
         
         function Intrument(obj,n)
