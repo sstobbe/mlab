@@ -1667,9 +1667,7 @@ classdef DS1054Z < handle
 %                 obj.(propnames{i}) = ldat.(propnames{i});
 %               end
 %           end
-        
         end
-        
     end
     
 end
