@@ -45,6 +45,7 @@ classdef VISA32 < handle
         defaultRM = []
         instrument = []
         RSRC_ADDR = []
+        findList = []
     end
     
     methods
@@ -74,6 +75,11 @@ classdef VISA32 < handle
         % Close comm channels
         function delete(obj)
             obj.Close();
+            if ~isempty(obj.defaultRM)
+                [status] = calllib('visa32', 'viClose', obj.defaultRM);
+                obj.RetCodeCheck(status);
+                obj.defaultRM = [];
+            end
         end 
         
         % VISA32 Open Instrument Connection
@@ -109,12 +115,6 @@ classdef VISA32 < handle
                 [status] = calllib('visa32', 'viClose', obj.instrument);
                 if status ~= 0; warning( 'viClose' ); end
                 obj.instrument = [];
-            end
-
-            if ~isempty(obj.defaultRM)
-                [status] = calllib('visa32', 'viClose', obj.defaultRM);
-                obj.RetCodeCheck(status);
-                obj.defaultRM = [];
             end
             
             obj.RSRC_ADDR = [];
@@ -314,6 +314,89 @@ classdef VISA32 < handle
                 end
             end
         end
+        
+        % VISA32 FindRsrc
+        %
+        %
+        function [RsrcStr, rtnCnt, fList ] = FindRsrc(obj, expr) 
+            
+            n = length(expr);
+            
+            switch class(expr)
+                case 'int8'
+                    expr = expr;
+                    
+                    if ~binary
+                        n = n - 1; % format is assumed cstring
+                    end
+                    
+                case 'char'
+                    expr = [ int8(expr) 0 ]; % convert to cstring
+                    
+                otherwise
+                    error('Not native type of VISA API or char array')
+            end
+
+            px = int8(zeros(1,256));
+            rtnCnt = 0;
+            fList = 0;
+            
+            [status, ~, fList, rtnCnt, RsrcStr ] = calllib('visa32', 'viFindRsrc', obj.defaultRM, ...
+                expr, fList, rtnCnt, px);
+            
+            obj.findList = fList;
+            
+            RsrcStr = deblank(char(RsrcStr));
+            
+        end
+        
+        % VISA32 FindRsrc
+        %
+        %
+        function [ RsrcStr ] = NextRsrc(obj)
+            px = int8(zeros(1,256));
+            [status, RsrcStr ] = calllib('visa32', 'viFindNext', obj.findList, px);
+            
+            RsrcStr = deblank(char(RsrcStr));
+            
+        end
+        
+        % VISA32 FindModel
+        %
+        %
+        function [ RsrcStr ] = FindModel(obj, ModelName)
+            
+            % Search for all registered resources
+            %[RsrcStr, iCnt ] = obj.FindRsrc('?*');
+            [RsrcStr, iCnt ] = obj.FindRsrc('GPIB?*INSTR');
+            
+            rsrclist = cell(iCnt,1);
+            
+            for idx = 1:iCnt
+                rsrclist{idx} = RsrcStr;
+                RsrcStr = obj.NextRsrc();
+            end
+            
+            for idx = 1:iCnt
+                found = [];
+                
+                try
+                    obj.Open(rsrclist{idx});
+                    resp = obj.Query('*IDN?');
+                    found = strfind( upper(resp), upper(ModelName) );
+                end
+                
+                obj.Close();
+                
+                if ~isempty(found)
+                  RsrcStr = rsrclist{idx};
+                  break;
+                end
+            end
+
+
+        end        
+        
     end
     
 end

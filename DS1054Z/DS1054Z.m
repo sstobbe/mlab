@@ -93,15 +93,18 @@ classdef DS1054Z < handle
     methods
         % DS1054Z Constructor
         function obj = DS1054Z( RADDR )
-            if nargin < 1
-                RADDR = ''; % TODO add default addr
-            end
             
             if isempty(which( 'VISA32' ))
                 error('VISA32 matlab wrapper not in MATLAB''s search path. ')
             end
             
             obj.vCom = VISA32();
+            
+            if nargin < 1
+                % Find First USB Decive with Rigol DS1054Z VID PID
+                RADDR = obj.vCom.FindRsrc('USB[0-9]*::0x1AB1::0x04CE::?*::INSTR');
+            end
+             
             
             try
                 obj.vCom.Open( RADDR );

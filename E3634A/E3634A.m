@@ -36,15 +36,15 @@ classdef E3634A < handle
     methods
         % E3648A Constructor
         function obj = E3634A( RADDR )
-            if nargin < 1
-                RADDR = ''; % TODO add default addr
-            end
-            
             if isempty(which( 'VISA32' ))
                 error('VISA32 matlab wrapper not in MATLAB''s search path. ')
             end
             
             obj.vCom = VISA32();
+            
+            if nargin < 1
+                RADDR = obj.vCom.FindModel('E3634A');
+            end
             
             try
                 obj.vCom.Open( RADDR );
