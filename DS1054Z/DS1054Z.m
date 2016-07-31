@@ -73,6 +73,7 @@ classdef DS1054Z < handle
         TRIG_EDGE_SLOPE
         TRIG_EDGE_LEVEL
         TRIG_SWEEP
+        TRIG_STATUS
         WREC_FEND
         WREC_FMAX
         WREC_FINT
@@ -1005,6 +1006,17 @@ classdef DS1054Z < handle
         end
         
         
+        % TRIG_STATUS getter
+        function val = get.TRIG_STATUS(obj)
+          resp = obj.vCom.Query(':TRIG:STAT?');
+          val = deblank(resp);
+        end
+        
+        % TRIG_STATUS setter
+        %function obj = set.TRIG_STATUS(obj,val)
+        %end
+        
+        
         % SRATE getter
         function val = get.SRATE(obj)
           resp = obj.vCom.Query(':ACQ:SRAT?');
@@ -1520,7 +1532,11 @@ classdef DS1054Z < handle
             end
             
             if nargout == 3
-                ts = 0:1/Fs:(memSamples-1)/Fs;
+                % When Trigger offset is set to 0 s, sample memory spans -6
+                % graticules to +6 graticules.
+                t0 = -6*obj.T_SCALE + obj.T_OFFSET;
+                ts = t0:1/Fs:(t0 +(memSamples-1)/Fs);
+                ts = ts';
             end
         end
         
@@ -1604,7 +1620,11 @@ classdef DS1054Z < handle
             end
             
             if nargout == 3
-                ts = 0:1/Fs:(memSamples-1)/Fs;
+                % When Trigger offset is set to 0 s, sample memory spans -6
+                % graticules to +6 graticules.
+                t0 = -6*obj.T_SCALE + obj.T_OFFSET;
+                ts = t0:1/Fs:(t0 +(memSamples-1)/Fs);
+                ts = ts';
             end
             
         end
@@ -1614,6 +1634,13 @@ classdef DS1054Z < handle
             saveObj.TimeStamp = datestr(now);
         end
         
+        function Run(obj)
+            obj.vCom.StrWrite(':RUN');
+        end
+        
+        function Stop(obj)
+            obj.vCom.StrWrite(':STOP');
+        end
     end
     
     methods ( Access = private )
