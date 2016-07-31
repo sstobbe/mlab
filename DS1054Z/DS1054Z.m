@@ -68,7 +68,7 @@ classdef DS1054Z < handle
         T_OFFSET
         T_MODE
         SRATE
-        TRIG_HOLD_OFF
+        TRIG_HOLDOFF
         TRIG_EDGE_CHN
         TRIG_EDGE_SLOPE
         TRIG_EDGE_LEVEL
@@ -944,6 +944,20 @@ classdef DS1054Z < handle
  
         end   
  
+        % TRIG_HOLDOFF getter
+        function val = get.TRIG_HOLDOFF(obj)
+          resp = obj.vCom.Query(':TRIG:HOLD?');
+          val = str2double(deblank(resp));
+        end
+        
+        % TRIG_HOLDOFF setter
+        function obj = set.TRIG_HOLDOFF(obj,val)
+            if ~isscalar(val)
+                error('INVALID TRIG HOLDOFF');
+            end
+            obj.vCom.StrWrite([':TRIG:HOLD '  num2str(val, '%10.3e')] );
+        end        
+        
         % TRIG_EDGE_CHN getter
         function val = get.TRIG_EDGE_CHN(obj)
           resp = obj.vCom.Query(':TRIG:EDG:SOUR?');
