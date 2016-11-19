@@ -68,6 +68,7 @@ classdef DS1054Z < handle
         T_OFFSET
         T_MODE
         SRATE
+        MDEPTH
         TRIG_HOLDOFF
         TRIG_EDGE_CHN
         TRIG_EDGE_SLOPE
@@ -1039,6 +1040,18 @@ classdef DS1054Z < handle
           resp = obj.vCom.Query(':ACQ:SRAT?');
           val = str2double(deblank(resp));
         end
+        
+        % MDEPTH getter
+        function val = get.MDEPTH(obj)
+            resp = obj.vCom.Query(':ACQuire:MDEPth?');
+            if strcmpi(deblank(resp), 'AUTO')
+                val = NaN();
+            else
+                val = str2double(deblank(resp));
+            end
+        end
+        
+
 
         % WREC_FEND getter
         function val = get.WREC_FEND(obj)
@@ -1441,7 +1454,11 @@ classdef DS1054Z < handle
                 memSamples = min( floor( T_LENGTH * 1/(wvs.xincrement)), 1200 ); 
             else
                 Fs = round(obj.SRATE);
-                memSamples = min( floor( T_LENGTH * Fs ), 12e6 );
+                if isnan(obj.MDEPTH)
+                    memSamples = min( floor( T_LENGTH * Fs ), 24e6 );
+                else
+                    memSamples = obj.MDEPTH;
+                end
             end
  
             % The DS1054Z does not always return a correct preamble
@@ -1485,7 +1502,7 @@ classdef DS1054Z < handle
                 
                 fprintf( '\nTransfering Channel %d\n', CHN );
                 
-                for i = 1:ceil(12E6/blkSize)
+                for i = 1:ceil(24E6/blkSize)
  
                     startidx = 1 + (i-1)*blkSize;
                     stopidx = min( i*blkSize, memSamples );
@@ -1619,7 +1636,11 @@ classdef DS1054Z < handle
                 memSamples = min( floor( T_LENGTH * 1/(wvs.xincrement)), 1200 ); 
             else
                 Fs = round(obj.SRATE);
-                memSamples = min( floor( T_LENGTH * Fs ), 12e6 );
+                if isnan(obj.MDEPTH)
+                    memSamples = min( floor( T_LENGTH * Fs ), 24e6 );
+                else
+                    memSamples = obj.MDEPTH;
+                end
             end
             
             frameCount = obj.WPLAY_FEND;
