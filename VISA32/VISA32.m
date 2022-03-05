@@ -375,6 +375,7 @@ classdef VISA32 < handle
             for idx = 1:iCnt
                 rsrclist{idx} = RsrcStr;
                 RsrcStr = obj.NextRsrc();
+                display(['Found: ' RsrcStr '\n']);
             end
             
             for idx = 1:iCnt
