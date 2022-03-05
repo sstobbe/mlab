@@ -89,6 +89,8 @@ classdef DS1054Z < handle
         WPLAY_DIR
         WPLAY_OPER
         WPLAY_FCUR
+        FREQ_COUNT
+        FREQ_COUNT_SRC
     end
     
     methods
@@ -1260,6 +1262,27 @@ classdef DS1054Z < handle
             obj.vCom.StrWrite([':FUNC:WREP:FCUR ' num2str(val, '%d') ] );
         end
         
+         % FREQ_COUNT getter
+        function val = get.FREQ_COUNT(obj)
+          resp = obj.vCom.Query(':MEAS:COUN:VAL?');
+          val = str2double(deblank(resp));
+        end     
+        
+        % FREQ_COUNT_SRC getter
+        function val = get.FREQ_COUNT_SRC(obj)
+          resp = obj.vCom.Query(':MEAS:COUN:SOUR?');
+          val = deblank(resp);
+        end
+        
+        % WPLAY_MODE setter
+        function obj = set.FREQ_COUNT_SRC(obj,val)
+            if ~any(strcmpi(deblank(val),{'CHAN1','CHAN2','CHAN3','CHAN4','OFF'}))
+                error('INVALID FREQ_COUNT_SRC');
+            end
+            
+            obj.vCom.StrWrite([':MEAS:COUN:SOUR ' deblank(upper(val)) ] );
+        end
+        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
@@ -1288,36 +1311,36 @@ classdef DS1054Z < handle
             
             % Direct Indexing BMP Read ------------------------------------
             % Elapsed time is 0.151698 seconds.
-            %             Bidx = 1:3:length(pxdat);
-            %             Gidx = 2:3:length(pxdat);
-            %             Ridx = 3:3:length(pxdat);
-            %             
-            %             Bidx = flipdim(reshape(Bidx,800,480)',1);
-            %             Gidx = flipdim(reshape(Gidx,800,480)',1);
-            %             Ridx = flipdim(reshape(Ridx,800,480)',1);
-            %             
-            %             B = pxdat(Bidx);
-            %             G = pxdat(Gidx);
-            %             R = pxdat(Ridx);
-            %             
-            %             img = [];
-            %             img(:,:,1) = R./255;
-            %             img(:,:,2) = G./255;
-            %             img(:,:,3) = B./255;
+                        Bidx = 1:3:length(pxdat);
+                        Gidx = 2:3:length(pxdat);
+                        Ridx = 3:3:length(pxdat);
+                        
+                        Bidx = flipdim(reshape(Bidx,800,480)',1);
+                        Gidx = flipdim(reshape(Gidx,800,480)',1);
+                        Ridx = flipdim(reshape(Ridx,800,480)',1);
+                        
+                        B = pxdat(Bidx);
+                        G = pxdat(Gidx);
+                        R = pxdat(Ridx);
+                        
+                        img = [];
+                        img(:,:,1) = R./255;
+                        img(:,:,2) = G./255;
+                        img(:,:,3) = B./255;
             %  ------------------------------------------------------------
             
  
         
             %  --- Simple BMP Read ----------------------------------------
             % Elapsed time is 0.075029 seconds.
-            B = pxdat(1:3:end);
-            G = pxdat(2:3:end);
-            R = pxdat(3:3:end);
-            
-            % create matlab CData image
-            cimg = reshape([R' G' B']./255,800,480,3);
-            
-            img = imrotate(cimg,90);
+%             B = pxdat(1:3:end);
+%             G = pxdat(2:3:end);
+%             R = pxdat(3:3:end);
+%             
+%             % create matlab CData image
+%             cimg = reshape([R' G' B']./255,800,480,3);
+%             
+%             img = imrotate(cimg,90);
             %  ------------------------------------------------------------
             
             if ColorInvert
@@ -1584,7 +1607,7 @@ classdef DS1054Z < handle
         %       wave    ( m by n by j ) m: sample buffer length
         %                               n: frame count
         %                               j: channel count
-        function [wave,Fs,ts] = WavReplay(obj, CHNIdx, ScreenMemory )
+        function [wave,Fs,ts] = WavReplay(obj, CHNIdx, ScreenMemory, NFrames)
             
             if ~obj.WREC_ENAB
                 error('Wave recording not enabled')
@@ -1598,6 +1621,10 @@ classdef DS1054Z < handle
             % default to acquiring the acquistion memory
             if nargin < 3
                 ScreenMemory = 0;
+            end
+            
+            if nargin < 4
+                NFrames = [ 1 inf ];
             end
             
             if any( ~ismember(CHNIdx,obj.ActiveChannels()) ) || ...
@@ -1643,17 +1670,21 @@ classdef DS1054Z < handle
                 end
             end
             
-            frameCount = obj.WPLAY_FEND;
+            frameCount = min( obj.WPLAY_FEND, NFrames(2) );
             
             wave = NaN(memSamples,frameCount,length(CHNIdx));
             
             obj.WPLAY_OPER = 'STOP';
             
-            for frame = 1:frameCount
+            for frame = NFrames(1):frameCount
                 obj.WPLAY_FCUR = frame;
-                
-                w = obj.WaveAcquire(CHNIdx, ScreenMemory );
-                
+                for i = 1:3
+                    try
+                        w = obj.WaveAcquire(CHNIdx, ScreenMemory );
+                        break;
+                    catch err
+                    end
+                end
                 wave(:,frame,:) = w;
             end
             
@@ -1667,6 +1698,156 @@ classdef DS1054Z < handle
             
         end
         
+        % WavReplay2
+        %   returns:
+        %       wave    ( m by n by j ) m: sample buffer length
+        %                               n: frame count
+        %                               j: channel count
+        function [wave,Fs,ts] = WavReplay2(obj, CHNIdx, ScreenMemory, FrameIdx)
+            
+ 
+            if ~obj.WREC_ENAB
+                error('Wave recording not enabled')
+            end
+            
+            % default to acquiring all active channels
+            if nargin < 2
+                CHNIdx = obj.ActiveChannels();
+            end
+            
+            % default to acquiring the acquistion memory
+            if nargin < 3
+                ScreenMemory = 0;
+            end
+            
+            if nargin < 4
+                FrameIdx = 1:(obj.WPLAY_FEND);
+            end
+            
+            if any( ~ismember(CHNIdx,obj.ActiveChannels()) ) || ...
+                    length(CHNIdx) > obj.NumActiveChannels
+                error('Some Channels are not active');
+            end
+            
+            % Set the output memory interface 
+            if ScreenMemory
+                obj.vCom.StrWrite(':WAV:MODE NORM');
+            else
+                obj.vCom.StrWrite(':WAV:MODE RAW');
+            end
+            
+            % Wave preamble provides the time scale and veritcal scale of
+            % ONE channel. However time base is common between channels
+            %
+            % Hold onto wave preamble response for debuging
+            
+            for j = 1:length(CHNIdx)
+                CHN = CHNIdx(j);
+
+                % select channel (CHN) for transfer
+                obj.vCom.StrWrite(sprintf(':WAV:SOUR CHAN%d', CHN));
+                wvs_resp = obj.vCom.Query(':WAV:PRE?');
+
+                wvs(j) = obj.WavStruct(regexp(deblank(wvs_resp), ',', 'split'));
+            end
+
+            % Acquistion memory depth is not directly known when in auto
+            % mode ... Must infer from sample rate and time scale
+            % 12 horizontal divisons
+            T_LENGTH = 12*obj.T_SCALE;
+ 
+            % Parse acquision sample rate
+            if ScreenMemory
+                % when sampling from screen memory use wave preamble
+                Fs = 1/(wvs.xincrement);
+                
+                [n,~,s] = engunits(Fs);
+                disp( [ 'Screen Equivelenet Time Sample Rate: ' num2str(n) ' ' s 'Sa/s'] );
+                
+                memSamples = min( floor( T_LENGTH * 1/(wvs.xincrement)), 1200 ); 
+            else
+                Fs = round(obj.SRATE);
+                if isnan(obj.MDEPTH)
+                    memSamples = min( floor( T_LENGTH * Fs ), 24e6 );
+                else
+                    memSamples = obj.MDEPTH;
+                end
+            end
+            
+            frameCount = min( obj.WPLAY_FEND, length(FrameIdx) );
+            
+            wave = NaN(memSamples,frameCount,length(CHNIdx));
+            
+            obj.WPLAY_OPER = 'STOP';
+            
+            %
+            for frame = 1:length(FrameIdx)
+                obj.WPLAY_FCUR = FrameIdx(frame);
+                for i = 1:3
+                    try
+                        for j = 1:length(CHNIdx)
+                            CHN = CHNIdx(j);
+
+                            % select channel (CHN) for transfer
+                            obj.vCom.StrWrite(sprintf(':WAV:SOUR CHAN%d', CHN));
+
+                            % Iterate reading up to 200 kSample memory blocks
+                            blkSize = 200E3; %
+
+                            for i = 1:ceil(24E6/blkSize)
+
+                                startidx = 1 + (i-1)*blkSize;
+                                stopidx = min( i*blkSize, memSamples );
+
+                                % set start and stop indices for current memory block
+                                obj.vCom.StrWrite(sprintf(':WAV:STAR %d', startidx));
+                                obj.vCom.StrWrite(sprintf(':WAV:STOP %d', stopidx));
+
+                                % Query for memory block
+                                buf = obj.vCom.Query(':WAV:DATA?', round(blkSize*1.1));
+
+                                len = stopidx - startidx + 1;
+
+                                TMC_HDR = buf(1:11);
+                                TMC_dlen = str2double( TMC_HDR(3:end) );
+
+                                if TMC_dlen ~= len
+                                    disp( 'Scope did not return correct data length')
+                                end
+
+                                if length(buf) < ( len + 11 )
+                                    disp('Insufficent data samples returned, perhaps bad preamble?')
+                                    disp(wvs)
+                                    disp('Preamble return string:')
+                                    disp(wvs_resp)
+                                    error('Did not return data')
+                                end
+
+                                % Assign wave data index past TMC header
+                                wave(startidx:stopidx,frame, j) = buf(12:(12+len-1));
+
+                                if( stopidx >= memSamples )
+                                    break;
+                                end
+                            end
+                        end
+                    catch err
+                    end
+                end
+                
+                for j = 1:length(CHNIdx)
+                    wave(:,frame,j) = (wave(:,frame,j) - wvs(j).yreference - wvs(j).yorigin) .* wvs(j).yincrement;
+                end
+            end
+            
+            if nargout == 3
+                % When Trigger offset is set to 0 s, sample memory spans -6
+                % graticules to +6 graticules.
+                t0 = -6*obj.T_SCALE + obj.T_OFFSET;
+                ts = t0:1/Fs:(t0 +(memSamples-1)/Fs);
+                ts = ts';
+            end
+        end
         function saveObj = saveobj(obj)
             saveObj = struct(obj);
             saveObj.TimeStamp = datestr(now);
@@ -1679,6 +1860,30 @@ classdef DS1054Z < handle
         function Stop(obj)
             obj.vCom.StrWrite(':STOP');
         end
+        
+        function [val] = Measure(obj,item,src)
+            if ~any(strcmpi(deblank(src),{'CHAN1','CHAN2','CHAN3','CHAN4','MATH'}))
+                error('INVALID SOURCE');
+            end            
+            if ~any(strcmpi(deblank(item),{'VMAX','VMIN','VPP','VTOP','VBASe',...
+                'VAMP', 'VAVG', 'VRMS', 'OVERshoot', 'OVER', 'MARea', 'MAR',...
+                'MPARea', 'MPAR', 'PREShoot','PRES', 'PERiod', 'PER', 'FREQuency',...
+                'FREQ', 'RTIMe', 'RTIM', 'FTIMe', 'FTIM', 'PWIDth', 'PWID',...
+                'NWIDth', 'NWID', 'PDUTy', 'PDUT', 'NDUTy', 'NDUT', 'TVMAX',...
+                'TVMIN', 'PSLEWrate', 'PSLEW', 'NSLEWrate', 'NSLEW', 'VUPper',...
+                'VUP', 'VMID', 'VLOWer', 'VLOW', 'VARIance', 'VARI', 'PVRMS'}))
+                error('INVALID SOURCE');
+            end
+            
+            obj.vCom.StrWrite([':MEAS:ITEM ' deblank(item) ',' deblank(src)]);
+
+            resp = obj.vCom.Query([':MEAS:ITEM? ' deblank(item) ',' deblank(src)]);
+            val = str2double(deblank(resp));
+            
+            if val > 1e20
+                val = nan();
+            end
+        end     
     end
     
     methods ( Access = private )
